@@ -1,0 +1,60 @@
+#othello-board {
+    display: grid;
+    grid-template-columns: repeat(8, 60px); /* 8列 */
+    grid-template-rows: repeat(8, 60px);    /* 8行 */
+    border: 4px solid #333;
+    margin: 20px auto;
+    width: 480px; /* 8 * 60px */
+}
+
+.square {
+    width: 60px;
+    height: 60px;
+    background-color: #006400; /* 濃い緑色 */
+    border: 1px solid #004d00;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: default; /* デフォルトは無効 */
+}
+
+.square.clickable {
+    cursor: pointer; /* 有効な手があるマスはクリック可能に */
+}
+
+.disc {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    /* 簡易アニメーション */
+    transition: transform 0.3s ease-out, background-color 0.3s ease-out;
+}
+
+.black {
+    background-color: black;
+}
+
+.white {
+    background-color: white;
+}
+
+.valid-move::after {
+    /* 有効な手を薄く強調するマーカー */
+    content: '';
+    display: block;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 0, 0.5); /* 半透明の黄色 */
+}
+
+#message {
+    margin-top: 10px;
+    font-weight: bold;
+    text-align: center;
+}
+
+#score {
+    text-align: center;
+    margin-bottom: 10px;
+}
