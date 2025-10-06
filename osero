@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>JavaScript オセロ</title>
+    <style>
+        /* CSSセクション: 盤面と駒の見た目を定義 */
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+
+        #othello-board {
+            display: grid;
+            grid-template-columns: repeat(8, 60px); /* 8列 */
+            grid-template-rows: repeat(8, 60px);    /* 8行 */
+            border: 4px solid #333;
+            margin: 20px auto;
+            width: 480px; /* 8 * 60px */
+            box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .square {
+            width: 60px;
+            height: 60px;
+            background-color: #006400; /* 濃い緑色 */
+            border: 1px solid #004d00;
+            box-sizing: border-box; /* 枠線を含めてサイズを計算 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: default;
+            position: relative;
+        }
+
+        .square.clickable {
+            cursor: pointer; /* 有効な手があるマスはクリック可能に */
+        }
+
+        .disc {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid #555;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.7);
+            /* 簡易アニメーション */
+            transition: transform 0.3s ease-out, background-color 0.3s ease-out;
+        }
+
+        .black {
+            background-color: black;
+        }
+
+        .white {
+            background-color: white;
+        }
+
+        .valid-move::after {
+            /* 有効な手を薄く強調するマーカー */
+            content: '';
+            display: block;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 0, 0.5); /* 半透明の黄色 */
+            pointer-events: none; /* マウスイベントを透過させる */
+        }
+
+        #message, #score {
+            margin-top: 10px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        #reset-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            background-color: #333;
+            color: white;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>JavaScript オセロゲーム</h1>
+    <div id="othello-board">
+        </div>
+    <div id="message"></div>
+    <div id="score"></div>
+    <button id="reset-button">リセットして最初から</button>
+
+    <script>
+        // JavaScriptセクション: ゲームロジックを定義
+        const BOARD_SIZE = 8;
+        const EMPTY = 0;
+        const BLACK = 1;
+        const WHITE = 2;
+        let board;
+        let currentPlayer;
+        let gameActive = true;
+
+        const boardElement = document.getElementById('othello-board');
+        const messageElement = document.getElementById('message');
+        const scoreElement = document.getElementById('score');
+        const resetButton = document.getElementById('reset-button');
+
+        // 8方向の差分 (上下左右、斜め)
+        const DIRECTIONS = [
+            {dr: -1, dc: 0}, {dr: 1, dc: 0}, {dr: 0, dc: -1}, {dr: 0, dc: 1}, 
+            {dr: -1, dc: -1}, {dr: -1, dc: 1}, {dr: 1, dc: -1}, {dr: 1, dc: 1}
+        ];
+
+        // ----------------- ゲーム初期化・描画 -----------------
+
+        function initializeGame() {
+            board = Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(EMPTY));
+            // 初期配置 (中央の4マス)
+            board[3][3] = WHITE;
+            board[3][4] = BLACK;
+            board[4][3] = BLACK;
+            board[4][4] = WHITE;
+            currentPlayer = BLACK;
+            gameActive = true;
+            renderBoard();
+            updateScore();
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = ''; 
+            const validMoves = getValidMoves(currentPlayer);
+            
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const square = document.createElement('div');
+                    square.classList.add('square');
+                    square.dataset.row = r;
+                    square.dataset.col = c;
+
+                    // 有効な手であるかチェック
+                    const isValid = validMoves.some(move => move.r === r && move.c === c);
+
+                    if (gameActive && isValid) {
+                        // ゲーム中で有効な手であれば、クリック可能にしてハイライト
+                        square.classList.add('valid-move', 'clickable');
+                        square.addEventListener('click', () => handleMove(r, c));
+                    }
+
+                    if (board[r][c] !== EMPTY) {
+                        const disc = document.createElement('div');
+                        disc.classList.add('disc', board[r][c] === BLACK ? 'black' : 'white');
+                        square.appendChild(disc);
+                    }
+                    
+                    boardElement.appendChild(square);
+                }
+            }
+            
+            checkGameStatus(validMoves);
+        }
+
+        // ----------------- ゲームロジック -----------------
+
+        /**
+         * 指定された(r, c)にplayerの駒を置いたときに裏返せる駒の座標リストを取得する。
+         * 有効な手でなければ空のリストを返す。
+         */
+        function getFlippablePieces(r, c, player) {
+            // 既に駒があるか、盤面外なら無効
+            if (board[r][c] !== EMPTY || !gameActive || r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) {
+                return [];
+            }
+
+            const opponent = player === BLACK ? WHITE : BLACK;
+            let flippable = [];
+            
+            DIRECTIONS.forEach(({dr, dc}) => {
+                let line = [];
+                let nr = r + dr;
+                let nc = c + dc;
+                
+                while (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
+                    const current = board[nr][nc];
+                    
+                    if (current === EMPTY) {
+                        line = []; // 空きマスがあれば、そこでラインは途切れる
+                        break;
+                    } else if (current === opponent) {
+                        line.push({r: nr, c: nc}); // 相手の駒を一時的に保存
+                    } else if (current === player) {
+                        // 自分の駒を見つけた場合、lineに保存されていた相手の駒が裏返せる
+                        flippable.push(...line); 
+                        break;
+                    }
+                    
+                    nr += dr;
+                    nc += dc;
+                }
+            });
+
+            return flippable;
+        }
+
+        /**
+         * 現在のプレイヤーが置けるすべての有効な手の座標リストを取得する。
+         */
+        function getValidMoves(player) {
+            const validMoves = [];
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    // 裏返せる駒が1つでもあれば、そこは有効な手である
+                    if (getFlippablePieces(r, c, player).length > 0) {
+                        validMoves.push({r, c});
+                    }
+                }
+            }
+            return validMoves;
+        }
+
+        // 駒を置く処理と裏返し処理
+        function handleMove(r, c) {
+            if (!gameActive) return;
+
+            const flippable = getFlippablePieces(r, c, currentPlayer);
+
+            if (flippable.length > 0) {
+                // 駒を置く
+                board[r][c] = currentPlayer;
+
+                // 駒を裏返す
+                flippable.forEach(pos => {
+                    board[pos.r][pos.c] = currentPlayer;
+                });
+
+                // ターン切り替え
+                switchTurn();
+            }
+        }
+
+        // ----------------- 状態管理 -----------------
+
+        function updateScore() {
+            let blackCount = 0;
+            let whiteCount = 0;
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (board[r][c] === BLACK) blackCount++;
+                    else if (board[r][c] === WHITE) whiteCount++;
+                }
+            }
+            scoreElement.textContent = `黒: ${blackCount} | 白: ${whiteCount}`;
+            return {black: blackCount, white: whiteCount};
+        }
+
+        function switchTurn() {
+            currentPlayer = currentPlayer === BLACK ? WHITE : BLACK;
+            renderBoard();
+        }
+
+        function checkGameStatus(currentValidMoves) {
+            updateScore();
+
+            if (currentValidMoves.length === 0) {
+                // 現在のプレイヤーが打てる手がない場合
+                const nextPlayer = currentPlayer === BLACK ? WHITE : BLACK;
+                const nextValidMoves = getValidMoves(nextPlayer);
+
+                if (nextValidMoves.length === 0) {
+                    // 両プレイヤーとも打てる手がない -> 終局
+                    endGame();
+                    return;
+                } else {
+                    // 現在のプレイヤーはパス
+                    const playerColor = currentPlayer === BLACK ? '黒' : '白';
+                    messageElement.textContent = `${playerColor}はパスです。${nextPlayer === BLACK ? '黒' : '白'}の番になります。`;
+                    
+                    // 1秒後に自動でターンをスキップ
+                    setTimeout(() => {
+                        currentPlayer = nextPlayer; 
+                        renderBoard();
+                    }, 1000); 
+                    return;
+                }
+            }
+
+            // 通常のターンメッセージ
+            const playerColor = currentPlayer === BLACK ? '黒' : '白';
+            messageElement.textContent = `${playerColor}の番です。駒を置く場所を選択してください。`;
+        }
+
+        function endGame() {
+            gameActive = false;
+            const {black: blackCount, white: whiteCount} = updateScore();
+
+            let resultMessage;
+            if (blackCount > whiteCount) {
+                resultMessage = `ゲーム終了！黒の勝ちです (${blackCount} vs ${whiteCount}) `;
+            } else if (whiteCount > blackCount) {
+                resultMessage = `ゲーム終了！白の勝ちです (${whiteCount} vs ${blackCount}) `;
+            } else {
+                resultMessage = `ゲーム終了！引き分けです (${blackCount} vs ${whiteCount}) `;
+            }
+            messageElement.textContent = resultMessage;
+        }
+
+        // ----------------- イベントリスナー -----------------
+
+        resetButton.addEventListener('click', initializeGame);
+
+        // ゲーム開始
+        initializeGame();
+    </script>
+</body>
+</html>
