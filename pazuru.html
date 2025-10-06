@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>スライディングパズル</title>
+    <style>
+        /* CSSセクション */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f8ff;
+            color: #333;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        #puzzle-board {
+            display: grid;
+            grid-template-columns: repeat(4, 100px); /* 4x4のグリッド */
+            grid-template-rows: repeat(4, 100px);
+            gap: 5px; /* タイル間の隙間 */
+            width: 420px; /* (100px * 4) + (5px * 3) = 415px */
+            height: 420px;
+            border: 5px solid #2980b9;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+            background-color: #ecf0f1;
+            padding: 5px;
+            border-radius: 8px;
+            position: relative; /* 子要素の配置用 */
+        }
+
+        .tile {
+            width: 100px;
+            height: 100px;
+            background-color: #3498db;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.2s; /* アニメーション */
+            user-select: none; /* テキスト選択を禁止 */
+        }
+
+        .tile:hover {
+            background-color: #2980b9;
+        }
+
+        .empty-tile {
+            background-color: #bdc3c7; /* 空きマスは別の色 */
+            cursor: default;
+        }
+
+        #message {
+            margin-top: 20px;
+            font-size: 1.5em;
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        #reset-button {
+            margin-top: 30px;
+            padding: 12px 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            border: none;
+            background-color: #27ae60;
+            color: white;
+            border-radius: 5px;
+            box-shadow: 0 4px #229954;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+
+        #reset-button:hover {
+            background-color: #2ecc71;
+            box-shadow: 0 2px #229954;
+        }
+        #reset-button:active {
+            box-shadow: none;
+            transform: translateY(2px);
+        }
+    </style>
+</head>
+<body>
+    <h1>スライディングパズル</h1>
+    <div id="puzzle-board">
+        </div>
+    <div id="message"></div>
+    <button id="reset-button">シャッフルしてやり直す</button>
+
+    <script>
+        // JavaScriptセクション
+        const BOARD_SIZE = 4; // 4x4のボード
+        const TOTAL_TILES = BOARD_SIZE * BOARD_SIZE;
+        let board = []; // パズルの現在の状態を保持する配列
+        let emptyTileIndex; // 空きマスのインデックス
+
+        const puzzleBoardElement = document.getElementById('puzzle-board');
+        const messageElement = document.getElementById('message');
+        const resetButton = document.getElementById('reset-button');
+
+        // ゲームの初期化
+        function initializeGame() {
+            board = Array.from({ length: TOTAL_TILES - 1 }, (_, i) => i + 1); // 1から15までのタイル
+            board.push(0); // 0を空きマスとする
+            emptyTileIndex = TOTAL_TILES - 1; // 最初は最後のマスが空きマス
+
+            shuffleBoard(); // ボードをシャッフル
+            renderBoard();
+            messageElement.textContent = '';
+        }
+
+        // ボードをシャッフルする
+        function shuffleBoard() {
+            // Fisher-Yatesシャッフルアルゴリズム
+            for (let i = board.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [board[i], board[j]] = [board[j], board[i]];
+            }
+
+            // 空きマスの位置を更新
+            emptyTileIndex = board.indexOf(0);
+
+            // 解けないパズルを避けるためのチェック（簡易版）
+            // 実際の15パズルは、盤面の反転数（Inversion Count）と空きマスの行で可解性を判断しますが、
+            // ここでは簡易的に、シャッフル後に何回かランダムに移動させています。
+            for (let i = 0; i < 100; i++) { // 100回程度ランダムに動かす
+                const possibleMoves = getPossibleMoves(emptyTileIndex);
+                const randomMoveIndex = Math.floor(Math.random() * possibleMoves.length);
+                const tileToMoveIndex = possibleMoves[randomMoveIndex];
+                swapTiles(tileToMoveIndex, emptyTileIndex);
+                emptyTileIndex = tileToMoveIndex;
+            }
+             emptyTileIndex = board.indexOf(0); // 最終的な空きマスの位置を再取得
+        }
+
+
+        // ボードを描画する
+        function renderBoard() {
+            puzzleBoardElement.innerHTML = ''; // ボードをクリア
+
+            board.forEach((tileValue, index) => {
+                const tile = document.createElement('div');
+                tile.classList.add('tile');
+                tile.dataset.index = index; // 自身のインデックスを保持
+
+                if (tileValue === 0) {
+                    tile.classList.add('empty-tile');
+                    tile.textContent = '';
+                } else {
+                    tile.textContent = tileValue;
+                    tile.addEventListener('click', () => handleTileClick(index));
+                }
+                puzzleBoardElement.appendChild(tile);
+            });
+        }
+
+        // タイルがクリックされたときの処理
+        function handleTileClick(clickedIndex) {
+            // クリックされたタイルが移動可能かチェック
+            if (isMovable(clickedIndex, emptyTileIndex)) {
+                swapTiles(clickedIndex, emptyTileIndex); // タイルを入れ替える
+                emptyTileIndex = clickedIndex; // 空きマスの位置を更新
+                renderBoard(); // ボードを再描画
+                
+                if (checkWin()) {
+                    messageElement.textContent = 'クリア！おめでとうございます！';
+                    // 全てのタイルのクリックイベントを無効化
+                    puzzleBoardElement.querySelectorAll('.tile:not(.empty-tile)').forEach(tile => {
+                        tile.removeEventListener('click', handleTileClick);
+                    });
+                }
+            }
+        }
+
+        // タイルが移動可能か判定
+        function isMovable(clickedIndex, emptyIndex) {
+            const clickedRow = Math.floor(clickedIndex / BOARD_SIZE);
+            const clickedCol = clickedIndex % BOARD_SIZE;
+            const emptyRow = Math.floor(emptyIndex / BOARD_SIZE);
+            const emptyCol = emptyIndex % BOARD_SIZE;
+
+            // 隣接しているかどうか（上下左右）
+            const isAdjacentRow = Math.abs(clickedRow - emptyRow) === 1 && clickedCol === emptyCol;
+            const isAdjacentCol = Math.abs(clickedCol - emptyCol) === 1 && clickedRow === emptyRow;
+
+            return isAdjacentRow || isAdjacentCol;
+        }
+
+        // 指定されたインデックスのタイルを空きマスと入れ替える
+        function swapTiles(index1, index2) {
+            [board[index1], board[index2]] = [board[index2], board[index1]];
+        }
+        
+        // 空きマスの周囲で移動可能なタイルのインデックスを取得
+        function getPossibleMoves(emptyIndex) {
+            const possibleMoves = [];
+            const emptyRow = Math.floor(emptyIndex / BOARD_SIZE);
+            const emptyCol = emptyIndex % BOARD_SIZE;
+
+            // 上下左右
+            const moves = [
+                {dr: -1, dc: 0}, // 上
+                {dr: 1, dc: 0},  // 下
+                {dr: 0, dc: -1}, // 左
+                {dr: 0, dc: 1}   // 右
+            ];
+
+            moves.forEach(({dr, dc}) => {
+                const newRow = emptyRow + dr;
+                const newCol = emptyCol + dc;
+                if (newRow >= 0 && newRow < BOARD_SIZE && newCol >= 0 && newCol < BOARD_SIZE) {
+                    possibleMoves.push(newRow * BOARD_SIZE + newCol);
+                }
+            });
+            return possibleMoves;
+        }
+
+        // クリア条件をチェック
+        function checkWin() {
+            // 1, 2, 3 ... 15, 0 の順になっていればクリア
+            for (let i = 0; i < TOTAL_TILES - 1; i++) {
+                if (board[i] !== i + 1) {
+                    return false;
+                }
+            }
+            return board[TOTAL_TILES - 1] === 0; // 最後のマスが空きマスであること
+        }
+
+        // ----------------- イベントリスナー -----------------
+        resetButton.addEventListener('click', initializeGame);
+
+        // ゲーム開始
+        initializeGame();
+    </script>
+</body>
+</html>
