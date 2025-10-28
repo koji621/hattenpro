@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EatTune - 体調別食事提案デモ (レシピ付)</title>
+    <style>
+        /* --- 基本スタイル --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #ffe0b2; /* アプリ背景色 */
+        }
+        .app-screen {
+            max-width: 400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        /* --- タイトル部分（画像コンテナとして調整） --- */
+        h1 {
+            color: #d84315;
+            text-align: center;
+            margin-bottom: 25px;
+            display: flex; /* 画像とテキストを並べるため */
+            justify-content: center;
+            align-items: center;
+            font-size: 1.8em;
+        }
+
+        /* タイトルロゴの代わりに画像を挿入 */
+        .app-logo {
+            width: 40px;
+            height: 40px;
+            margin-right: 10px;
+            border-radius: 50%; /* 丸いロゴに */
+            object-fit: cover;
+            /* 架空のロゴ画像URLを設定 (Google検索から生成された画像をシミュレーション) */
+            background-image: url('https://dummyimage.com/100x100/ff9800/ffffff.png&text=E');
+            background-size: cover;
+            display: inline-block;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        /* --- 入力セクションのスタイル --- */
+        h2 {
+            color: #5d4037;
+            font-size: 1.2em;
+            margin-top: 20px;
+            border-bottom: 2px solid #ffcc80;
+            padding-bottom: 5px;
+        }
+        .condition-input label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #4e342e;
+        }
+        .option-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .option-group button {
+            background: none;
+            border: 1px solid #ffcc80;
+            padding: 8px 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9em;
+            flex-grow: 1;
+            margin: 4px;
+            min-width: 80px;
+            text-align: center;
+        }
+        .option-group button.selected {
+            background-color: #ffb74d;
+            color: #5d4037;
+            border-color: #ffb74d;
+            font-weight: bold;
+            transform: scale(1.03);
+        }
+
+        /* --- 提案ボタン --- */
+        button.check-button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 25px;
+            border-radius: 8px;
+            background-color: #ff9800;
+            color: white;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button.check-button:hover {
+            background-color: #fb8c00;
+        }
+
+        /* --- 結果表示エリア --- */
+        #recipeResult {
+            margin-top: 30px;
+            padding: 18px;
+            border: 2px solid #a1887f;
+            border-radius: 10px;
+            background-color: #fafafa;
+            min-height: 100px;
+        }
+        #recipeResult h3 {
+            color: #d84315;
+            margin-top: 0;
+            border-bottom: 1px dashed #e0e0e0;
+            padding-bottom: 5px;
+            font-size: 1.1em;
+        }
+        .recipe-item {
+            margin-top: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #388e3c;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        .recipe-detail {
+            font-size: 0.9em;
+            color: #757575;
+            margin-top: 5px;
+        }
+        .recipe-tip {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #fff8e1;
+            border-left: 4px solid #ffcc80;
+            font-size: 0.9em;
+        }
+
+        /* --- モーダル（ポップアップ）スタイル（変更なし） --- */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 10% auto;
+            padding: 25px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-btn:hover, .close-btn:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .recipe-modal-title {
+            color: #d84315;
+            border-bottom: 2px solid #ffcc80;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .recipe-modal-content ul, .recipe-modal-content ol {
+            padding-left: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-screen">
+        <h1><span class="app-logo"></span>EatTune</h1>
+
+        <div class="condition-input">
+            <h2>今日の体調を入力</h2>
+
+            <label>疲労度 (倦怠感の指標)</label>
+            <div class="option-group" id="fatigue">
+                <button data-value="Low"> 低い</button>
+                <button data-value="Medium"> 中</button>
+                <button data-value="High"> 高い</button>
+            </div>
+
+            <label style="margin-top: 15px;">気になる症状</label>
+            <div class="option-group" id="symptom">
+                <button data-value="Stomach"> 胃もたれ</button>
+                <button data-value="Cold"> 風邪気味</button>
+                <button data-value="Stress"> ストレス</button>
+                <button data-value="None"> 特になし</button>
+            </div>
+
+            <label style="margin-top: 15px;">運動量</label>
+            <div class="option-group" id="activity">
+                <button data-value="None"> ほぼなし</button>
+                <button data-value="Normal"> 普通</button>
+                <button data-value="Hard"> ハード</button>
+            </div>
+
+            <button class="check-button" onclick="proposeRecipe()">最適な献立を提案</button>
+        </div>
+
+        <div id="recipeResult">
+            <h3>体調診断＆レシピ提案</h3>
+            <p style="text-align: center;">体調を入力し、「最適な献立を提案」を押してください。</p>
+        </div>
+    </div>
+
+    <div id="recipeModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h2 class="recipe-modal-title" id="modalRecipeTitle"></h2>
+            <div class="recipe-modal-content" id="modalRecipeContent">
+                </div>
+        </div>
+    </div>
+
+
+    <script>
+        // グローバル変数で選択状態を保持
+        let selectedFatigue = '';
+        let selectedSymptom = '';
+        let selectedActivity = '';
+        let currentRecipeKey = '';
+
+        // --- レシピデータ (変更なし) ---
+        const RECIPES = {
+            "Stomach_Care": {
+                name: "消化に優しい 豆腐と卵のお粥",
+                detail: "脂質を抑えた**消化抜群**のメニュー。消化器官を休ませましょう。",
+                tip: " ポイント: 味付けは薄めにし、よく噛んでゆっくり食べてください。",
+                ingredients: ["ご飯: 軽く茶碗1杯分", "水: 300ml", "絹豆腐: 1/4丁", "卵: 1個", "鶏ガラスープの素: 小さじ1/2", "塩: 少々", "しょうが(チューブ): 少量"],
+                instructions: ["鍋にご飯、水、鶏ガラスープの素、塩を入れて中火にかける。", "沸騰したら弱火にし、ご飯がふっくらするまで5〜7分煮る。", "豆腐をスプーンなどで崩して加え、温める。", "溶き卵を回し入れ、蓋をして火を止め、2分ほど蒸らす。", "器に盛り、お好みで少量のしょうがをのせて完成。"]
+            },
+            "Cold_Care": {
+                name: "免疫力アップ 鶏肉とネギの生姜スープ",
+                detail: "**ビタミンCとタンパク質**を補給し、**体を温める**薬膳風スープです。",
+                tip: " ポイント: 食後に柑橘類でさらにビタミンCを補給すると効果的です。",
+                ingredients: ["鶏むね肉（またはひき肉）: 80g", "長ネギ: 1/3本", "生姜: 1かけ", "水: 350ml", "鶏ガラスープの素: 小さじ1", "塩こしょう: 少々"],
+                instructions: ["鶏肉は一口大、長ネギは斜め薄切り、生姜は半分を千切り、半分をすりおろす。", "鍋にごま油（分量外）を熱し、鶏肉を炒め、色が変わったらネギとすりおろし生姜を加える。", "水と鶏ガラスープの素を加え、沸騰したらアクを取り、塩こしょうで味を調える。", "器に盛り付け、千切り生姜をトッピングして完成。"]
+            },
+            "Stress_Care": {
+                name: "メンタルケア！クリームチーズとバジルパスタ（ショートパスタ）",
+                detail: "**セロトニンの原料**を含む乳製品と、気分を落ち着かせるバジルを使用。調理も簡単です。",
+                tip: " ポイント: コーヒーではなく、温かいハーブティーに切り替えてみましょう。",
+                ingredients: ["ショートパスタ: 80g", "クリームチーズ: 大さじ1", "バジルソース: 大さじ2", "プチトマト: 3個", "オリーブオイル: 小さじ1", "塩こしょう: 少々"],
+                instructions: ["パスタをパッケージの表記通りに茹でる（早茹でタイプ推奨）。プチトマトは半分に切る。", "ボウルにクリームチーズとバジルソースを入れ、パスタの茹で汁（大さじ1程度）を加えてよく混ぜる。", "茹で上がったパスタを湯切りし、ボウルのソースと手早く絡める。", "プチトマトを加え、塩こしょうで味を調え、器に盛り付けて完成。"]
+            },
+            "Fatigue_Care": {
+                name: "超時短 豚肉とニラのスタミナ炒め",
+                detail: "**ビタミンB1**が豊富な豚肉で疲労回復を促進。調理時間10分以内。",
+                tip: " ポイント: ニンニク（チューブでも可）を少し加えると、さらにスタミナアップ！",
+                ingredients: ["豚こま切れ肉: 100g", "ニラ: 1/3束", "醤油: 大さじ1", "酒: 大さじ1/2", "オイスターソース: 小さじ1", "ごま油: 少々"],
+                instructions: ["ニラは5cm長さに切る。★印の調味料（醤油、酒、オイスターソース）を混ぜておく。", "フライパンにごま油を熱し、豚肉を炒める。", "豚肉の色が変わったらニラを加え、サッと炒める。", "★印の調味料を回し入れ、全体に絡めたらすぐに火を止め、器に盛って完成。"]
+            },
+            "Activity_Care": {
+                name: "高タンパク質 鮭とほうれん草のムニエル",
+                detail: "**良質な脂質とタンパク質**で筋肉を修復。ご飯（炭水化物）もしっかり摂りましょう。",
+                tip: " ポイント: ほうれん草はサッと茹でて水気を絞ってから使用し、鉄分もしっかり補給！",
+                ingredients: ["生鮭: 1切れ", "ほうれん草: 1/3袋", "バター: 10g", "薄力粉: 大さじ1", "塩こしょう: 少々", "レモン汁: 少々"],
+                instructions: ["鮭は塩こしょうを振り、薄力粉を薄くまぶす。ほうれん草は茹でて水気を絞り、3cmに切る。", "フライパンにバターを半量熱し、鮭を皮目から焼く。両面こんがり焼けたら取り出す。", "残りのバターでほうれん草をサッと炒め、塩こしょうで味を調える。", "器に鮭とほうれん草を盛り付け、鮭にレモン汁を少々かけて完成。"]
+            },
+            "Standard_Care": {
+                name: "バランス重視！彩り野菜の味噌汁定食",
+                detail: "和食で**様々な栄養素をバランス良く**摂取。不足しがちな食物繊維も。",
+                tip: " ポイント: 発酵食品（味噌、納豆）は腸内環境を整えます。",
+                ingredients: ["だし汁: 300ml", "お好みの野菜（大根、人参、キャベツなど）: 50g", "豆腐: 少量", "味噌: 大さじ1", "ご飯: 茶碗1杯", "納豆: 1パック"],
+                instructions: ["野菜は食べやすい大きさに切る。鍋にだし汁と硬い野菜（人参など）を入れて煮る。", "野菜が柔らかくなったら、豆腐と葉物野菜（キャベツなど）を加え、火を止めて味噌を溶く。", "器に味噌汁、ご飯、納豆を盛り付け、定食として完成。副菜に海苔や漬物を添えるとさらに良い。"]
+            }
+        };
+
+
+        // --- UI/ロジック関数 (変更なし) ---
+
+        // ボタンの選択状態を制御する関数
+        function setupButtonSelection(id) {
+            const container = document.getElementById(id);
+            container.addEventListener('click', (event) => {
+                if (event.target.tagName === 'BUTTON') {
+                    Array.from(container.children).forEach(btn => btn.classList.remove('selected'));
+                    event.target.classList.add('selected');
+                    const value = event.target.getAttribute('data-value');
+                    if (id === 'fatigue') selectedFatigue = value;
+                    else if (id === 'symptom') selectedSymptom = value;
+                    else if (id === 'activity') selectedActivity = value;
+                }
+            });
+        }
+
+        // 初期設定
+        setupButtonSelection('fatigue');
+        setupButtonSelection('symptom');
+        setupButtonSelection('activity');
+
+
+        /**
+         * コンディションに基づいてレシピキーを選択するロジック
+         */
+        function proposeRecipe() {
+            const resultElement = document.getElementById('recipeResult');
+
+            if (!selectedFatigue || !selectedSymptom || !selectedActivity) {
+                resultElement.innerHTML = '<h3> 入力エラー</h3><p style="text-align: center;">すべての項目を入力してください。</p>';
+                currentRecipeKey = null;
+                return;
+            }
+
+            // 症状（最優先）
+            if (selectedSymptom === 'Stomach') {
+                currentRecipeKey = "Stomach_Care";
+            } else if (selectedSymptom === 'Cold') {
+                currentRecipeKey = "Cold_Care";
+            } else if (selectedSymptom === 'Stress') {
+                currentRecipeKey = "Stress_Care";
+            }
+            // 症状がない場合の疲労度・運動量
+            else if (selectedFatigue === 'High') {
+                currentRecipeKey = "Fatigue_Care";
+            } else if (selectedActivity === 'Hard') {
+                currentRecipeKey = "Activity_Care";
+            }
+            // 標準的なコンディション
+            else {
+                currentRecipeKey = "Standard_Care";
+            }
+
+            // 結果の表示を更新
+            renderRecipeResult(currentRecipeKey);
+        }
+
+        /**
+         * 結果エリアに提案レシピを表示する関数
+         */
+        function renderRecipeResult(key) {
+            const recipe = RECIPES[key];
+            const resultElement = document.getElementById('recipeResult');
+
+            // 診断結果の表示を改善
+            let diagnosisText = 'バランス';
+            if (selectedSymptom !== 'None' && selectedSymptom) {
+                 if (selectedSymptom === 'Stomach') diagnosisText = '胃もたれケア';
+                 if (selectedSymptom === 'Cold') diagnosisText = '風邪気味ケア';
+                 if (selectedSymptom === 'Stress') diagnosisText = 'ストレスケア';
+            } else if (selectedFatigue === 'High') {
+                diagnosisText = '疲労回復';
+            } else if (selectedActivity === 'Hard') {
+                diagnosisText = '高運動量ケア';
+            }
+
+
+            resultElement.innerHTML = `
+                <h3>診断結果: ${diagnosisText}が最適！</h3>
+                <div class="recipe-item" onclick="openModal('${key}')">  提案レシピ: ${recipe.name} (タップで詳細)</div>
+                <div class="recipe-detail">栄養ポイント: ${recipe.detail}</div>
+                <div class="recipe-tip"> ${recipe.tip}</div>
+                <p style="margin-top: 15px; text-align: center;"><a href="#" onclick="openModal('${key}'); return false;" style="color: #ff9800; font-weight: bold;"> 詳しいレシピを見る</a></p>
+            `;
+        }
+
+
+        // --- モーダル（ポップアップ）制御関数 (変更なし) ---
+
+        function openModal(key) {
+            const recipe = RECIPES[key];
+            const modal = document.getElementById('recipeModal');
+            const titleElement = document.getElementById('modalRecipeTitle');
+            const contentElement = document.getElementById('modalRecipeContent');
+
+            // タイトルと内容を設定
+            titleElement.textContent = recipe.name;
+
+            // 材料リストのHTML生成
+            const ingredientsHtml = '<h4>【材料（1人分目安）】</h4><ul>' +
+                                    recipe.ingredients.map(item => `<li>${item}</li>`).join('') +
+                                    '</ul>';
+
+            // 手順リストのHTML生成
+            const instructionsHtml = '<h4>【作り方】</h4><ol>' +
+                                     recipe.instructions.map(item => `<li>${item}</li>`).join('') +
+                                     '</ol>';
+
+            contentElement.innerHTML = ingredientsHtml + instructionsHtml;
+
+            // モーダルを表示
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('recipeModal').style.display = 'none';
+        }
+
+        // モーダル外をクリックで閉じる処理
+        window.onclick = function(event) {
+            const modal = document.getElementById('recipeModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+
+    </script>
+</body>
+</html>
